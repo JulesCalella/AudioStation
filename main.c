@@ -39,6 +39,7 @@
 #include <xc.h>
 #include <stdint.h>
 #include <p24EP128MC206.h>
+#include <math.h>
 #include "hardwareConfig.h"
 
 // LED Outputs
@@ -98,10 +99,14 @@ void ledSweepRight();
 void pong(uint8_t move);
 void timerInit();
 void dacOutput(uint16_t output);
+void generateWaveform();
 
 // Global Variables
-volatile uint16_t timerCounter = 0;
-volatile int interruptCalled = 1;
+volatile uint16_t arrayIndex = 0;
+volatile int adc = 0;
+volatile int waveformArray[36];
+volatile int waveformOctaveArray[36];
+volatile uint16_t output = 0;
 
 /*******************************************************************************
  * Timer 1 Interrupt
@@ -110,7 +115,13 @@ volatile int interruptCalled = 1;
  ******************************************************************************/
 void __attribute__((__interrupt__, no_auto_psv)) _T1Interrupt(void)
 {    
-    interruptCalled = 1;
+    dacOutput(output);
+    
+    output = 20000 + waveformArray[arrayIndex] + ((adc/1000.0) * waveformOctaveArray[arrayIndex]);
+    
+    arrayIndex++;
+    
+    if(arrayIndex >= 36) arrayIndex = 0;
     
     IFS0bits.T1IF = 0;
 }
@@ -194,6 +205,7 @@ int main(void)
     oscillatorInit();
     LED2 = 0;
     
+    generateWaveform();
     timerInit();
     
     // Set pin 12 to analog 
@@ -202,23 +214,16 @@ int main(void)
     adcInit();
     
     int pot1 = 0;
-    int val1 = 0x3FF/6;
-    int val2 = val1*2;
-    int val3 = val1*3;
-    int val4 = val1*4;
-    int val5 = val1*5;
-    int btnPressed;
-    int countUp;
     
     while(1)
     {
-        Nop();
+        
         
         // Read AN9
         if(AD1CON1bits.DONE == 1)
         {
             AD1CON1bits.DONE = 0;
-            pot1 = ADC1BUF0;
+            adc = ADC1BUF0;
         }
     }
     
@@ -433,4 +438,17 @@ void dacOutput(uint16_t output)
     
     if((output & 0x8000) != 0) DAC0 = 1;
     else DAC0 = 0;
+}
+
+
+void generateWaveform()
+{
+    int i = 0;
+    float pi = 3.14159;
+    
+    for(i=0; i<36; i++)
+    {
+        waveformArray[i] = (10000.0 * sin(2.0*pi*(i/36.0)));
+        waveformOctaveArray[i] = (10000.0 * sin(4.0*pi*(i/36.0)));
+    }
 }
