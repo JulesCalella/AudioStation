@@ -100,14 +100,23 @@ void pong(uint8_t move);
 void timerInit();
 void dacOutput(uint16_t output);
 void generateWaveform();
+void setVolumes();
 
 // Global Variables
 volatile uint16_t max = 1;
 volatile uint16_t arrayIndex = 0;
-volatile uint16_t adc = 0;
-volatile float volume1 = 0;
-volatile int waveformArray[36];
-volatile int waveformOctaveArray[36];
+float volume1 = 0.0;
+float volume2 = 0.0;
+float volume3 = 0.0;
+float volume4 = 0.0;
+float volume5 = 0.0;
+int waveformRootArray[73];
+int waveformOvertone1Array[73];
+int waveformOvertone2Array[73];
+int waveformOvertone3Array[73];
+int waveformOvertone4Array[73];
+int waveformOvertone5Array[73];
+volatile int waveformFinalArray[73];
 volatile uint16_t output = 0;
 volatile uint16_t root = 0;
 volatile uint16_t overtone1 = 0;
@@ -121,11 +130,11 @@ void __attribute__((__interrupt__, no_auto_psv)) _T1Interrupt(void)
 {    
     dacOutput(output);
     
-    output = 20000 + root + overtone1;
+    output = 20000 + waveformFinalArray[arrayIndex];
     
     arrayIndex++;
     
-    if(arrayIndex >= 36) arrayIndex = 0;
+    if(arrayIndex >= 73) arrayIndex = 0;
     
     IFS0bits.T1IF = 0;
 }
@@ -212,8 +221,12 @@ int main(void)
     generateWaveform();
     timerInit();
     
-    // Set pin 12 to analog 
+    // Set pins to analog 
     ANSELAbits.ANSA11 = 1;
+    ANSELAbits.ANSA0 = 1;
+    ANSELAbits.ANSA1 = 1;
+    ANSELBbits.ANSB1 = 1;
+    ANSELCbits.ANSC0 = 1;
     
     adcInit();
     
@@ -221,15 +234,9 @@ int main(void)
     
     while(1)
     {
-        root = waveformArray[arrayIndex];
-        overtone1 = volume1 * waveformOctaveArray[arrayIndex];
-        
-        // Read AN9
-        if(AD1CON1bits.DONE == 1)
-        {
-            AD1CON1bits.DONE = 0;
-            adc = ADC1BUF0;
-            volume1 = adc/1000.0;
+        // Read Button
+        if(BTN1 == 0)        {
+            setVolumes();
         }
     }
     
@@ -452,9 +459,92 @@ void generateWaveform()
     int i = 0;
     float pi = 3.14159;
     
-    for(i=0; i<36; i++)
+    for(i=0; i<73; i++)
     {
-        waveformArray[i] = (5000.0 * sin(2.0*pi*(i/36.0)));
-        waveformOctaveArray[i] = (5000.0 * sin(4.0*pi*(i/36.0)));
+        waveformRootArray[i] = (5000.0 * sin(2.0*pi*(i/73.0)));
+        waveformOvertone1Array[i] = (5000.0 * sin(4.0*pi*(i/73.0)));
+        waveformOvertone2Array[i] = (5000.0 * sin(6.0*pi*(i/73.0)));
+        waveformOvertone3Array[i] = (5000.0 * sin(8.0*pi*(i/73.0)));
+        waveformOvertone4Array[i] = (5000.0 * sin(10.0*pi*(i/73.0)));
+        waveformOvertone5Array[i] = (5000.0 * sin(12.0*pi*(i/73.0)));
     }
+}
+
+// 12 13 14 16 21
+void setVolumes()
+{
+    LED5 = 1;
+    T1CONbits.TON = 0;
+    
+    uint16_t adc;
+    
+    // Read AN9, pin 12, RV1
+    AD1CHS0bits.CH0SA = 9;
+    AD1CON1bits.SAMP = 1;
+    
+    while(AD1CON1bits.DONE != 1);
+    
+    AD1CON1bits.DONE = 0;
+    adc = ADC1BUF0;
+    volume1 = adc/4096.0;
+    
+    
+    // Read AN0, pin 13, RV2
+    AD1CHS0bits.CH0SA = 0;
+    AD1CON1bits.SAMP = 1;
+    
+    while(AD1CON1bits.DONE != 1);
+    
+    AD1CON1bits.DONE = 0;
+    adc = ADC1BUF0;
+    volume2 = adc/4096.0;
+    
+    
+    // Read AN1, pin 14, RV3
+    AD1CHS0bits.CH0SA = 1;
+    AD1CON1bits.SAMP = 1;
+    
+    while(AD1CON1bits.DONE != 1);
+    
+    AD1CON1bits.DONE = 0;
+    adc = ADC1BUF0;
+    volume3 = adc/4096.0;
+    
+    
+    // Read AN3, pin 16, RV4
+    AD1CHS0bits.CH0SA = 3;
+    AD1CON1bits.SAMP = 1;
+    
+    while(AD1CON1bits.DONE != 1);
+    
+    AD1CON1bits.DONE = 0;
+    adc = ADC1BUF0;
+    volume4 = adc/4096.0;
+    
+    
+    // Read AN6, pin 21, RV5
+    AD1CHS0bits.CH0SA = 6;
+    AD1CON1bits.SAMP = 1;
+    
+    while(AD1CON1bits.DONE != 1);
+    
+    AD1CON1bits.DONE = 0;
+    adc = ADC1BUF0;
+    volume5 = adc/4096.0;
+    
+    int i = 0;
+    
+    for(i=0; i<73; i++)
+    {
+        waveformFinalArray[i] = waveformRootArray[i] + 
+                (volume1 * waveformOvertone1Array[i]) +
+                (volume2 * waveformOvertone2Array[i]) +
+                (volume3 * waveformOvertone3Array[i]) +
+                (volume4 * waveformOvertone4Array[i]) +
+                (volume5 * waveformOvertone5Array[i]);
+    }
+    
+    T1CONbits.TON = 1;
+    
+    LED5 = 0;
 }

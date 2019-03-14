@@ -55,7 +55,7 @@ void timerInit()
     IEC0bits.T1IE = 1;
     IPC0bits.T1IP = 0x02;
     
-    PR1 = 6334; // 6334 @ 101.3375MHz = 8kHz
+    PR1 = 3168; // 6334 @ 101.3375MHz = 8kHz
     
     T1CONbits.TON = 1;  // Turn on timer
 }
@@ -66,12 +66,12 @@ void adcInit()
     AD1CON1bits.ADON = 0;
     
     AD1CON1bits.ADSIDL = 0; // Continues in idle mode
-    AD1CON1bits.AD12B = 0;  // 4-channel, 10-bit
+    AD1CON1bits.AD12B = 1;  // 1-channel, 12-bit
     AD1CON1bits.FORM = 0x0; // integer
     AD1CON1bits.SSRCG = 0;
     AD1CON1bits.SSRC = 0x7; // internal counter
-    AD1CON1bits.SIMSAM = 0; // Sampled multiple channels in sequence
-    AD1CON1bits.ASAM = 1;   // Samples immediately after last conversion
+    //AD1CON1bits.SIMSAM = 0; // Sampled multiple channels in sequence
+    AD1CON1bits.ASAM = 0;   // Samples when SAMP bit is set
     
     AD1CON2bits.VCFG = 0x7;
     AD1CON2bits.CSCNA = 0;  // Does not scan inputs
@@ -89,6 +89,4 @@ void adcInit()
     AD1CHS0bits.CH0SA = 0x09;   // positive input is AN9
     
     AD1CON1bits.ADON = 1;
-    
-    AD1CON1bits.SAMP = 1;   // Start first sample
 }
