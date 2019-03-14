@@ -102,11 +102,15 @@ void dacOutput(uint16_t output);
 void generateWaveform();
 
 // Global Variables
+volatile uint16_t max = 1;
 volatile uint16_t arrayIndex = 0;
-volatile int adc = 0;
+volatile uint16_t adc = 0;
+volatile float volume1 = 0;
 volatile int waveformArray[36];
 volatile int waveformOctaveArray[36];
 volatile uint16_t output = 0;
+volatile uint16_t root = 0;
+volatile uint16_t overtone1 = 0;
 
 /*******************************************************************************
  * Timer 1 Interrupt
@@ -117,7 +121,7 @@ void __attribute__((__interrupt__, no_auto_psv)) _T1Interrupt(void)
 {    
     dacOutput(output);
     
-    output = 20000 + waveformArray[arrayIndex] + ((adc/1000.0) * waveformOctaveArray[arrayIndex]);
+    output = 20000 + root + overtone1;
     
     arrayIndex++;
     
@@ -202,7 +206,7 @@ int main(void)
     E = 0;
     
     LED2 = 1;
-    oscillatorInit();
+    if(oscillatorInit() == -1) LED6 = 1;
     LED2 = 0;
     
     generateWaveform();
@@ -213,17 +217,19 @@ int main(void)
     
     adcInit();
     
-    int pot1 = 0;
+    //int pot1 = 0;
     
     while(1)
     {
-        
+        root = waveformArray[arrayIndex];
+        overtone1 = volume1 * waveformOctaveArray[arrayIndex];
         
         // Read AN9
         if(AD1CON1bits.DONE == 1)
         {
             AD1CON1bits.DONE = 0;
             adc = ADC1BUF0;
+            volume1 = adc/1000.0;
         }
     }
     
@@ -448,7 +454,7 @@ void generateWaveform()
     
     for(i=0; i<36; i++)
     {
-        waveformArray[i] = (10000.0 * sin(2.0*pi*(i/36.0)));
-        waveformOctaveArray[i] = (10000.0 * sin(4.0*pi*(i/36.0)));
+        waveformArray[i] = (5000.0 * sin(2.0*pi*(i/36.0)));
+        waveformOctaveArray[i] = (5000.0 * sin(4.0*pi*(i/36.0)));
     }
 }

@@ -8,7 +8,7 @@
 #ifndef HARDWARECONFIG_H
 #define	HARDWARECONFIG_H
 
-void oscillatorInit();
+int oscillatorInit();
 void timerInit();
 void adcInit();
 

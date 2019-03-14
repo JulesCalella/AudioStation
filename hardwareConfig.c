@@ -3,14 +3,34 @@
 #include "hardwareConfig.h"
 
 // **UNFINISHED
-void oscillatorInit()
+int oscillatorInit()
 {
-    if(OSCCONbits.COSC == 0x00) return;
+    //if(OSCCONbits.COSC == 0x00) return;
     
-    __builtin_write_OSCCONH(0x00);
+    CLKDIV = 0x0000;
+    PLLFBD = 0x0035;
+    OSCTUN = 0x0000;
+    
+    //Unlock PLL
+    __builtin_write_OSCCONH(0x78);
+    __builtin_write_OSCCONH(0x9A);
+    __builtin_write_OSCCONH(0x01);
+    
+    __builtin_write_OSCCONL(OSCCON | 0x46);
+    __builtin_write_OSCCONL(OSCCON | 0x57);
     __builtin_write_OSCCONL(OSCCON | 0x01);
     
-    while(OSCCONbits.LOCK != 1);
+    while(OSCCONbits.OSWEN != 0);
+    
+    while(OSCCONbits.LOCK != 1)
+    {
+        if(OSCCONbits.CF == 1){
+            OSCCONbits.CF = 0;
+            return -1;
+        }
+    }
+    
+    return 0;
 }
 
 // **UNFINISHED
@@ -35,7 +55,7 @@ void timerInit()
     IEC0bits.T1IE = 1;
     IPC0bits.T1IP = 0x02;
     
-    PR1 = 500; // Counts to 1000
+    PR1 = 6334; // 6334 @ 101.3375MHz = 8kHz
     
     T1CONbits.TON = 1;  // Turn on timer
 }
