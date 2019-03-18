@@ -41,55 +41,10 @@
 #include <p24EP128MC206.h>
 #include <math.h>
 #include "hardwareConfig.h"
+#include "waveform.h"
 
-// LED Outputs
-#define LED1 LATGbits.LATG6
-#define LED2 LATGbits.LATG7
-#define LED3 LATGbits.LATG8
-#define LED4 LATGbits.LATG9
-#define LED5 LATCbits.LATC1
-#define LED6 LATCbits.LATC2
-
-// IO Pins
-#define A LATCbits.LATC11
-#define B LATEbits.LATE12
-#define C LATEbits.LATE13
-#define D LATEbits.LATE14
-#define E LATEbits.LATE15
-#define READ_A PORTCbits.RC11
-#define READ_B PORTEbits.RE12
-#define READ_C PORTEbits.RE13
-#define READ_D PORTEbits.RE14
-#define READ_E PORTEbits.RE15
-
-// Buttons
-#define BTN1 PORTDbits.RD8   // 42 - D8
-#define BTN2 PORTCbits.RC10   // 45 - C10
-#define BTN3 PORTCbits.RC13   // 47 - C13
-#define BTN4 PORTCbits.RC6   // 50 - C6
-#define BTN5 PORTCbits.RC7   // 51 - C7
-#define BTN6 PORTCbits.RC8   // 52 - C8
-#define BTN7 PORTDbits.RD5   // 53 - D5
-#define BTN8 PORTDbits.RD6   // 54 - D6
-#define BTN9 PORTCbits.RC9   // 55 - C9
-
-// Digital to Analog Converter Outputs
-#define DAC0 LATAbits.LATA7     // 1 - A7
-#define DAC1 LATBbits.LATB14    // 2 - B14
-#define DAC2 LATBbits.LATB15    // 3 - B15
-#define DAC3 LATAbits.LATA8     // 31 - A8
-#define DAC4 LATBbits.LATB4     // 32 -B4
-#define DAC5 LATBbits.LATB5     // 43 - B5
-#define DAC6 LATBbits.LATB6     // 44 - B6
-#define DAC7 LATBbits.LATB7     // 46 - B7
-#define DAC8 LATBbits.LATB8     // 48 - B8
-#define DAC9 LATBbits.LATB9     // 49 - B9
-#define DAC10 LATBbits.LATB10   // 60 - B10
-#define DAC11 LATBbits.LATB11   // 61 - B11
-#define DAC12 LATBbits.LATB12   // 62 - B12
-#define DAC13 LATBbits.LATB13   // 63 - B13
-#define DAC14 LATAbits.LATA10   // 64 - A10
-#define DAC15 LATAbits.LATA12   // 11 - A12
+#define SCORE_SIZE_Y 100
+#define SCORE_SIZE_X 10
 
 // Function Prototypes
 void delay(int value);
@@ -97,45 +52,95 @@ void lightCount(uint16_t count);
 void ledSweepLeft();
 void ledSweepRight();
 void pong(uint8_t move);
-void timerInit();
-void dacOutput(uint16_t output);
-void generateWaveform();
-void setVolumes();
+int parseScoreString();
+void fillString();
+void createOutput();
 
 // Global Variables
-volatile uint16_t max = 1;
-volatile uint16_t arrayIndex = 0;
-float volume1 = 0.0;
-float volume2 = 0.0;
-float volume3 = 0.0;
-float volume4 = 0.0;
-float volume5 = 0.0;
-int waveformRootArray[73];
-int waveformOvertone1Array[73];
-int waveformOvertone2Array[73];
-int waveformOvertone3Array[73];
-int waveformOvertone4Array[73];
-int waveformOvertone5Array[73];
-volatile int waveformFinalArray[73];
 volatile uint16_t output = 0;
-volatile uint16_t root = 0;
-volatile uint16_t overtone1 = 0;
+volatile uint16_t timer = 0;
+volatile uint16_t tempoCounterLight = 0;
+volatile uint16_t tempoCounter = 0;
+volatile uint16_t tempoTripletCounter = 0;
+volatile uint16_t tempoCounterMax = (SAMPLING_FREQUENCY * 60.0) / (TEMPO * 16.0); // 16 comes from 64th/4beats
+volatile uint16_t tempoTripletCounterMax = (SAMPLING_FREQUENCY * 60.0) / (TEMPO * 24.0); // 24 comes from (32th/4beats)/3 triplets
+volatile uint16_t measure = 0;
+volatile uint16_t tempo64Counter = 0;
+volatile uint16_t tempo32TripletCounter = 0;
+volatile uint8_t update = 0;
+
+uint8_t scoreString[SCORE_SIZE_Y][SCORE_SIZE_X];
+uint16_t scoreElementY = 0;
+uint16_t scoreElementX = 0;
+volatile NOTE note1;
+volatile NOTE note2;
+volatile NOTE note3;
+volatile NOTE note4;
+volatile NOTE note5;
+volatile NOTE note6;
+volatile NOTE note7;
+volatile NOTE note8;
+volatile NOTE note9;
+volatile NOTE note10;
+
 
 /*******************************************************************************
  * Timer 1 Interrupt
  * 
- * Sampling Frequency = 8kHz
+ * Sampling Frequency = 16kHz
  ******************************************************************************/
 void __attribute__((__interrupt__, no_auto_psv)) _T1Interrupt(void)
 {    
+    // Send output to DAC
     dacOutput(output);
     
-    output = 20000 + waveformFinalArray[arrayIndex];
+    update = 1;
     
-    arrayIndex++;
+    // Increment tempoCounter and triplet counter
+    tempoCounter++;
+    tempoTripletCounter++;
     
-    if(arrayIndex >= 73) arrayIndex = 0;
+    // IF TRUE: 1/32 triplet note duration passed
+    if(tempoTripletCounter >= tempoTripletCounterMax){
+        tempoTripletCounter = 0;
+        tempo32TripletCounter ++;
+    }
     
+    // IF TRUE: 1/64th note duration passed
+    if(tempoCounter >= tempoCounterMax){
+        // Reset tempoCounter
+        tempoCounter = 0;
+        // Increment 64th note duration
+        tempo64Counter++;
+        // Increment tempoCounterLight 
+        tempoCounterLight++;
+        
+        // IF 64 notes passed, 1 measure is complete
+        if(tempo64Counter >= 64){
+            // Reset 64ths counter and triplet counter
+            tempo64Counter = 0;
+            tempo32TripletCounter = 0;
+            
+            // Increment measure
+            measure++;
+            
+            // TEMP: Loop first 5 measures
+            if(measure >= 5){
+                measure = 0;
+                scoreElementY = 0;
+                scoreElementX = 0;
+            }
+        }
+        
+        // Adjust the light
+        if(tempoCounterLight >= 16){
+            LED3 = ~LED3;
+            tempoCounterLight = 0;
+        }
+        
+
+    }
+
     IFS0bits.T1IF = 0;
 }
 
@@ -147,90 +152,39 @@ int main(void)
     PTGCONbits.PTGWDT = 0;  // Disable Watchdog timer
     RCONbits.SWDTEN = 0;
     
-    // Potentiometers
-    // Make A11,A0,A1,B1,C0 intputs
-    TRISAbits.TRISA11 = 1;
-    TRISAbits.TRISA0 = 1;
-    TRISAbits.TRISA1 = 1;
-    TRISBbits.TRISB1 = 1;
-    TRISCbits.TRISC0 = 1;
+    pinInit();
     
-    // Buttons
-    TRISDbits.TRISD8 = 1;    // 42 - D8
-    TRISCbits.TRISC10 = 1;   // 45 - C10
-    TRISCbits.TRISC13 = 1;   // 47 - C13
-    TRISCbits.TRISC6 = 1;    // 50 - C6
-    TRISCbits.TRISC7 = 1;    // 51 - C7
-    TRISCbits.TRISC8 = 1;    // 52 - C8
-    TRISDbits.TRISD5 = 1;    // 53 - D5
-    TRISDbits.TRISD6 = 1;    // 54 - D6
-    TRISCbits.TRISC9 = 1;    // 55 - C9
-    
-    // LEDs
-    // Make G6,G7,G8,G9,C1,C2,C11,E12,E13,E14,E15 outputs
-    TRISGbits.TRISG6 = 0;   // LED1
-    TRISGbits.TRISG7 = 0;   // LED2
-    TRISGbits.TRISG8 = 0;   // LED3
-    TRISGbits.TRISG9 = 0;   // LED4
-    TRISCbits.TRISC1 = 0;   // LED5
-    TRISCbits.TRISC2 = 0;   // LED6
-    
-    // IO pins
-    TRISCbits.TRISC11 = 0;
-    TRISEbits.TRISE12 = 0;
-    TRISEbits.TRISE13 = 0;
-    TRISEbits.TRISE14 = 0;
-    TRISEbits.TRISE15 = 0;
-    
-    // DACs
-    TRISAbits.TRISA7 = 0;     // 1 - A7
-    TRISBbits.TRISB14 = 0;    // 2 - B14
-    TRISBbits.TRISB15 = 0;    // 3 - B15
-    TRISAbits.TRISA8 = 0;     // 31 - A8
-    TRISBbits.TRISB4 = 0;     // 32 -B4
-    TRISBbits.TRISB5 = 0;     // 43 - B5
-    TRISBbits.TRISB6 = 0;     // 44 - B6
-    TRISBbits.TRISB7 = 0;     // 46 - B7
-    TRISBbits.TRISB8 = 0;     // 48 - B8
-    TRISBbits.TRISB9 = 0;     // 49 - B9
-    TRISBbits.TRISB10 = 0;   // 60 - B10
-    TRISBbits.TRISB11 = 0;   // 61 - B11
-    TRISBbits.TRISB12 = 0;   // 62 - B12
-    TRISBbits.TRISB13 = 0;   // 63 - B13
-    TRISAbits.TRISA10 = 0;   // 64 - A10
-    TRISAbits.TRISA12 = 0;
-    
-    // Turn LEDs off
-    LED1 = 0;
-    LED2 = 0;
-    LED3 = 0;
-    LED4 = 0;
-    LED5 = 0;
-    LED6 = 0;
-    
-    A = 1;
-    B = 1;
-    C = 0;
-    D = 1;
-    E = 0;
-    
-    LED2 = 1;
     if(oscillatorInit() == -1) LED6 = 1;
-    LED2 = 0;
     
-    generateWaveform();
-    timerInit();
+    note1.available = 1;
+    note2.available = 1;
+    note3.available = 1;
+    note4.available = 1;
+    note5.available = 1;
+    note6.available = 1;
+    note7.available = 1;
+    note8.available = 1;
+    note9.available = 1;
+    note10.available = 1;
     
-    // Set pins to analog 
-    ANSELAbits.ANSA11 = 1;
-    ANSELAbits.ANSA0 = 1;
-    ANSELAbits.ANSA1 = 1;
-    ANSELBbits.ANSB1 = 1;
-    ANSELCbits.ANSC0 = 1;
+    fillString();
+    
+    parseScoreString();
+    parseScoreString();
+    parseScoreString();
+    parseScoreString();
+    parseScoreString();
+    parseScoreString();
+    parseScoreString();
+    parseScoreString();
+    parseScoreString();
+    parseScoreString();
+    
+    createOutput();
     
     adcInit();
-    
-    //int pot1 = 0;
+    timerInit();
+    setVolumes();
     
     while(1)
     {
@@ -238,6 +192,270 @@ int main(void)
         if(BTN1 == 0)        {
             setVolumes();
         }
+        
+        parseScoreString();
+        
+        if(update == 1) createOutput();
+    }
+    
+    return 0;
+}
+
+/******************************************************************************* 
+ * PARSE SCORE STRING
+ ******************************************************************************/
+/* Returns -1 if the end of the score is reached
+ * Returns 0 if no problems
+ * Message format:
+ *      FFh - message start (0)
+ *      XXXXh - Measure Start Number (1 & 2)
+ *      XXh - Location Start (3)
+ *      XXXXh - Measure End Number (4 & 5)
+ *      XXh - Location End (6)
+ *      XXh - Note quality/value (7)
+ *      XXh - Note pitch (8)
+ *      XXh - Note volume (9)
+ */
+int parseScoreString()
+{
+    // Search for message start at 0xFF [BYTE 0]
+    while(scoreString[scoreElementY][scoreElementX] != 0xFF){
+        scoreElementY++;
+        
+        // If end of string met, move to next row
+        if(scoreElementY >= SCORE_SIZE_Y){
+            scoreElementY = 0;
+            scoreElementX++;
+            
+            if((scoreElementX == SCORE_SIZE_X) && (scoreElementY == SCORE_SIZE_Y)) return -1;
+        }
+    }
+    
+    uint8_t currentElementY = scoreElementY + 1;
+    uint8_t currentElementX = scoreElementX;
+    uint16_t measureStartValue;
+    uint8_t locationStartValue;
+    uint16_t measureEndValue;
+    uint8_t locationEndValue;
+    uint8_t noteValue;
+    int *waveform;
+    uint16_t waveformMax;
+    uint8_t pitchValue;
+    uint8_t volumeValue;
+    uint8_t isTriplet = 0;
+    
+    // Find measure start number [BYTES 1 & 2]
+    measureStartValue = scoreString[currentElementY][currentElementX];
+    currentElementY++;
+    measureStartValue = (measureStartValue << 8) | scoreString[currentElementY][currentElementX];
+    
+    // Find location start [BYTE 3]
+    currentElementY++;
+    locationStartValue = scoreString[currentElementY][currentElementX];
+    
+    // Find measure end number [BYTES 4 & 5]
+    currentElementY++;
+    measureEndValue = scoreString[currentElementY][currentElementX];
+    currentElementY++;
+    measureEndValue = (measureEndValue << 8) | scoreString[currentElementY][currentElementX];
+    
+    // Find location start [BYTE 6]
+    currentElementY++;
+    locationEndValue = scoreString[currentElementY][currentElementX];
+
+    // Determine which note is being played [BYTE 7]
+    currentElementY++;
+    noteValue = scoreString[currentElementY][currentElementX];
+
+    switch(noteValue){
+        case A:
+            waveform = waveformA;
+            waveformMax = totalElementsA;
+            break;
+        case AS:
+            waveform = waveformASharp;
+            waveformMax = totalElementsASharp;
+            break;
+        case B:
+            waveform = waveformB;
+            waveformMax = totalElementsB;
+            break;
+        case C:
+            waveform = waveformC;
+            waveformMax = totalElementsC;
+            break;
+        case CS:
+            waveform = waveformCSharp;
+            waveformMax = totalElementsCSharp;
+            break;
+        case D:
+            waveform = waveformD;
+            waveformMax = totalElementsD;
+            break;
+        case DS:
+            waveform = waveformDSharp;
+            waveformMax = totalElementsDSharp;
+            break;
+        case E:
+            waveform = waveformE;
+            waveformMax = totalElementsE;
+            break;
+        case F:
+            waveform = waveformF;
+            waveformMax = totalElementsF;
+            break;
+        case FS:
+            waveform = waveformFSharp;
+            waveformMax = totalElementsFSharp;
+            break;
+        case G:
+            waveform = waveformG;
+            waveformMax = totalElementsG;
+            break;
+        case GS:
+            waveform = waveformGSharp;
+            waveformMax = totalElementsGSharp;
+            break;
+        default:
+            waveform = waveformA;
+            waveformMax = totalElementsA;
+            break;
+    }
+
+    // Record the pitch
+    currentElementY++;
+    pitchValue = scoreString[currentElementY][currentElementX];
+
+    // Record the volume
+    currentElementY++;
+    volumeValue = scoreString[currentElementY][currentElementX];
+
+    // Find an available note struct
+    if(note1.available == 1){
+        note1.available = 0;
+        note1.pitch = pitchValue;
+        note1.currentElement = 0;
+        note1.measureStart = measureStartValue;
+        note1.locationStart = locationStartValue;
+        note1.measureEnd = measureEndValue;
+        note1.locationEnd = locationEndValue;
+        note1.triplet = isTriplet;
+        note1.waveform = waveform;
+        note1.waveformElementMax = waveformMax;
+    } else if(note2.available == 1){
+        note2.available = 0;
+        note2.pitch = pitchValue;
+        note2.currentElement = 0;
+        note2.measureStart = measureStartValue;
+        note2.locationStart = locationStartValue;
+        note2.measureEnd = measureEndValue;
+        note2.locationEnd = locationEndValue;
+        note2.triplet = isTriplet;
+        note2.waveform = waveform;
+        note2.waveformElementMax = waveformMax;
+    } else if(note3.available == 1){
+        note3.available = 0;
+        note3.pitch = pitchValue;
+        note3.currentElement = 0;
+        note3.measureStart = measureStartValue;
+        note3.locationStart = locationStartValue;
+        note3.measureEnd = measureEndValue;
+        note3.locationEnd = locationEndValue;
+        note3.triplet = isTriplet;
+        note3.waveform = waveform;
+        note3.waveformElementMax = waveformMax;
+    } else if(note4.available == 1){
+        note4.available = 0;
+        note4.pitch = pitchValue;
+        note4.currentElement = 0;
+        note4.measureStart = measureStartValue;
+        note4.locationStart = locationStartValue;
+        note4.measureEnd = measureEndValue;
+        note4.locationEnd = locationEndValue;
+        note4.triplet = isTriplet;
+        note4.waveform = waveform;
+        note4.waveformElementMax = waveformMax;
+    } else if(note5.available == 1){
+        note5.available = 0;
+        note5.pitch = pitchValue;
+        note5.currentElement = 0;
+        note5.measureStart = measureStartValue;
+        note5.locationStart = locationStartValue;
+        note5.measureEnd = measureEndValue;
+        note5.locationEnd = locationEndValue;
+        note5.triplet = isTriplet;
+        note5.waveform = waveform;
+        note5.waveformElementMax = waveformMax;
+    } else if(note6.available == 1){
+        note6.available = 0;
+        note6.pitch = pitchValue;
+        note6.currentElement = 0;
+        note6.measureStart = measureStartValue;
+        note6.locationStart = locationStartValue;
+        note6.measureEnd = measureEndValue;
+        note6.locationEnd = locationEndValue;
+        note6.triplet = isTriplet;
+        note6.waveform = waveform;
+        note6.waveformElementMax = waveformMax;
+    } else if(note7.available == 1){
+        note7.available = 0;
+        note7.pitch = pitchValue;
+        note7.currentElement = 0;
+        note7.measureStart = measureStartValue;
+        note7.locationStart = locationStartValue;
+        note7.measureEnd = measureEndValue;
+        note7.locationEnd = locationEndValue;
+        note7.triplet = isTriplet;
+        note7.waveform = waveform;
+        note7.waveformElementMax = waveformMax;
+    } else if(note8.available == 1){
+        note8.available = 0;
+        note8.pitch = pitchValue;
+        note8.currentElement = 0;
+        note8.measureStart = measureStartValue;
+        note8.locationStart = locationStartValue;
+        note8.measureEnd = measureEndValue;
+        note8.locationEnd = locationEndValue;
+        note8.triplet = isTriplet;
+        note8.waveform = waveform;
+        note8.waveformElementMax = waveformMax;
+    } else if(note9.available == 1){
+        note9.available = 0;
+        note9.pitch = pitchValue;
+        note9.currentElement = 0;
+        note9.measureStart = measureStartValue;
+        note9.locationStart = locationStartValue;
+        note9.measureEnd = measureEndValue;
+        note9.locationEnd = locationEndValue;
+        note9.triplet = isTriplet;
+        note9.waveform = waveform;
+        note9.waveformElementMax = waveformMax;
+    } else if(note10.available == 1){
+        note10.available = 0;
+        note10.pitch = pitchValue;
+        note10.currentElement = 0;
+        note10.measureStart = measureStartValue;
+        note10.locationStart = locationStartValue;
+        note10.measureEnd = measureEndValue;
+        note10.locationEnd = locationEndValue;
+        note10.triplet = isTriplet;
+        note10.waveform = waveform;
+        note10.waveformElementMax = waveformMax;
+    } else {
+        // If no notes are available, return but dont increment scoreElementY
+        // or scoreElementX
+        return 0;
+    }
+    
+    // Increment to the next message start
+    scoreElementY += 10;
+    
+    // Bounds Check
+    if(scoreElementY >= SCORE_SIZE_Y){
+        scoreElementY = 0;
+        scoreElementX++;
+        
+        if((scoreElementX == SCORE_SIZE_X) && (scoreElementY == SCORE_SIZE_Y)) return -1;
     }
     
     return 0;
@@ -399,152 +617,432 @@ void pong(uint8_t move)
     }
 }
 
-/*******************************************************************************
- * DAC Output
- ******************************************************************************/
-void dacOutput(uint16_t output)
+/* Test Song
+ * 0xFF 0x0003 0x00 0x0003 0x10 0x03 0x02 0x7F
+ * 0xFF 0x0003 0x10 0x0003 0x20 0x07 0x02 0x7F
+ * 0xFF 0x0003 0x20 0x0003 0x30 0x0A 0x02 0x7F
+ * 0xFF 0x0004 0x00 0x0005 0x00 0x03 0x02 0x7F
+ * 0xFF 0x0004 0x00 0x0005 0x00 0x07 0x02 0x7F
+ * 0xFF 0x0004 0x00 0x0005 0x00 0x0A 0x02 0x7F
+ */
+void fillString()
 {
-    if((output & 0x0001) != 0) DAC15 = 1;
-    else DAC15 = 0;
+    // 0xFF 0x0003 0x00 0x0003 0x10 0x03 0x02 0x7F
+    scoreString[0][0] = 0xFF;
+    scoreString[1][0] = 0x00;
+    scoreString[2][0] = 1;
+    scoreString[3][0] = 0;//0x00;
+    scoreString[4][0] = 0x00;
+    scoreString[5][0] = 1;
+    scoreString[6][0] = 8;//0x08;
+    scoreString[7][0] = C;
+    scoreString[8][0] = 0x02;
+    scoreString[9][0] = 0x7F;
+    // 0xFF 0x0003 0x10 0x0003 0x20 0x07 0x02 0x7F
+    scoreString[10][0] = 0xFF;
+    scoreString[11][0] = 0x00;
+    scoreString[12][0] = 1;
+    scoreString[13][0] = 8;//0x80;
+    scoreString[14][0] = 0x00;
+    scoreString[15][0] = 1;
+    scoreString[16][0] = 16;//0x10;
+    scoreString[17][0] = C;
+    scoreString[18][0] = 0x02;
+    scoreString[19][0] = 0x7F;
+    // 0xFF 0x0003 0x20 0x0003 0x30 0x0A 0x02 0x7F
+    scoreString[20][0] = 0xFF;
+    scoreString[21][0] = 0x00;
+    scoreString[22][0] = 1;
+    scoreString[23][0] = 16;//0x10;
+    scoreString[24][0] = 0x00;
+    scoreString[25][0] = 1;
+    scoreString[26][0] = 24;//0x18;
+    scoreString[27][0] = G;
+    scoreString[28][0] = 0x02;
+    scoreString[29][0] = 0x7F;
+    // 0xFF 0x0004 0x00 0x0005 0x00 0x03 0x02 0x7F
+    scoreString[30][0] = 0xFF;
+    scoreString[31][0] = 0x00;
+    scoreString[32][0] = 1;
+    scoreString[33][0] = 24;
+    scoreString[34][0] = 0x00;
+    scoreString[35][0] = 1;
+    scoreString[36][0] = 32;
+    scoreString[37][0] = G;
+    scoreString[38][0] = 0x02;
+    scoreString[39][0] = 0x7F;
+    //  0xFF 0x0004 0x00 0x0005 0x00 0x07 0x02 0x7F
+    scoreString[40][0] = 0xFF;
+    scoreString[41][0] = 0x00;
+    scoreString[42][0] = 1;
+    scoreString[43][0] = 32;
+    scoreString[44][0] = 0x00;
+    scoreString[45][0] = 1;
+    scoreString[46][0] = 40;
+    scoreString[47][0] = A;
+    scoreString[48][0] = 0x02;
+    scoreString[49][0] = 0x7F;
+    // 0xFF 0x0004 0x00 0x0005 0x00 0x0A 0x02 0x7F
+    scoreString[50][0] = 0xFF;
+    scoreString[51][0] = 0x00;
+    scoreString[52][0] = 1;
+    scoreString[53][0] = 40;
+    scoreString[54][0] = 0x00;
+    scoreString[55][0] = 1;
+    scoreString[56][0] = 48;
+    scoreString[57][0] = A;
+    scoreString[58][0] = 0x02;
+    scoreString[59][0] = 0x7F;
     
-    if((output & 0x0002) != 0) DAC14 = 1;
-    else DAC14 = 0;
+    scoreString[60][0] = 0xFF;
+    scoreString[61][0] = 0x00;
+    scoreString[62][0] = 1;
+    scoreString[63][0] = 48;//0x00;
+    scoreString[64][0] = 0x00;
+    scoreString[65][0] = 2;
+    scoreString[66][0] = 0;//0x08;
+    scoreString[67][0] = G;
+    scoreString[68][0] = 0x02;
+    scoreString[69][0] = 0x7F;
     
-    if((output & 0x0004) != 0) DAC13 = 1;
-    else DAC13 = 0;
+    scoreString[70][0] = 0xFF;
+    scoreString[71][0] = 0x00;
+    scoreString[72][0] = 2;
+    scoreString[73][0] = 0;//0x00;
+    scoreString[74][0] = 0x00;
+    scoreString[75][0] = 2;
+    scoreString[76][0] = 8;//0x08;
+    scoreString[77][0] = F;
+    scoreString[78][0] = 0x02;
+    scoreString[79][0] = 0x7F;
     
-    if((output & 0x0008) != 0) DAC12 = 1;
-    else DAC12 = 0;
+    scoreString[80][0] = 0xFF;
+    scoreString[81][0] = 0x00;
+    scoreString[82][0] = 2;
+    scoreString[83][0] = 8;//0x00;
+    scoreString[84][0] = 0x00;
+    scoreString[85][0] = 0x02;
+    scoreString[86][0] = 16;//0x08;
+    scoreString[87][0] = F;
+    scoreString[88][0] = 0x02;
+    scoreString[89][0] = 0x7F;
     
-    if((output & 0x0010) != 0) DAC11 = 1;
-    else DAC11 = 0;
+    scoreString[90][0] = 0xFF;
+    scoreString[91][0] = 0x00;
+    scoreString[92][0] = 2;
+    scoreString[93][0] = 16;//0x00;
+    scoreString[94][0] = 0x00;
+    scoreString[95][0] = 2;
+    scoreString[96][0] = 24;//0x08;
+    scoreString[97][0] = E;
+    scoreString[98][0] = 0x02;
+    scoreString[99][0] = 0x7F;
     
-    if((output & 0x0020) != 0) DAC10 = 1; 
-    else DAC10 = 0;
+    scoreString[0][1] = 0xFF;
+    scoreString[1][1] = 0x00;
+    scoreString[2][1] = 2;
+    scoreString[3][1] = 24;//0x00;
+    scoreString[4][1] = 0x00;
+    scoreString[5][1] = 2;
+    scoreString[6][1] = 32;//0x08;
+    scoreString[7][1] = E;
+    scoreString[8][1] = 0x02;
+    scoreString[9][1] = 0x7F;
     
-    if((output & 0x0040) != 0) DAC9 = 1;
-    else DAC9 = 0;
+    scoreString[10][1] = 0xFF;
+    scoreString[11][1] = 0x00;
+    scoreString[12][1] = 2;
+    scoreString[13][1] = 32;//0x00;
+    scoreString[14][1] = 0x00;
+    scoreString[15][1] = 2;
+    scoreString[16][1] = 40;//0x08;
+    scoreString[17][1] = D;
+    scoreString[18][1] = 0x02;
+    scoreString[19][1] = 0x7F;
     
-    if((output & 0x0080) != 0) DAC8 = 1;
-    else DAC8 = 0;
+    scoreString[20][1] = 0xFF;
+    scoreString[21][1] = 0x00;
+    scoreString[22][1] = 2;
+    scoreString[23][1] = 40;//0x00;
+    scoreString[24][1] = 0x00;
+    scoreString[25][1] = 2;
+    scoreString[26][1] = 48;//0x08;
+    scoreString[27][1] = D;
+    scoreString[28][1] = 0x02;
+    scoreString[29][1] = 0x7F;
     
-    if((output & 0x0100) != 0) DAC7 = 1;
-    else DAC7 = 0;
+    scoreString[30][1] = 0xFF;
+    scoreString[31][1] = 0x00;
+    scoreString[32][1] = 2;
+    scoreString[33][1] = 48;//0x00;
+    scoreString[34][1] = 0x00;
+    scoreString[35][1] = 3;
+    scoreString[36][1] = 0;//0x08;
+    scoreString[37][1] = C;
+    scoreString[38][1] = 0x02;
+    scoreString[39][1] = 0x7F;
     
-    if((output & 0x0200) != 0) DAC6 = 1;
-    else DAC6 = 0;
+    scoreString[40][1] = 0xFF;
+    scoreString[41][1] = 0x00;
+    scoreString[42][1] = 3;
+    scoreString[43][1] = 16;//0x00;
+    scoreString[44][1] = 0x00;
+    scoreString[45][1] = 4;
+    scoreString[46][1] = 0;//0x08;
+    scoreString[47][1] = G;
+    scoreString[48][1] = 0x02;
+    scoreString[49][1] = 0x7F;
     
-    if((output & 0x0400) != 0) DAC5 = 1;
-    else DAC5 = 0;
+    scoreString[50][1] = 0xFF;
+    scoreString[51][1] = 0x00;
+    scoreString[52][1] = 3;
+    scoreString[53][1] = 24;//0x00;
+    scoreString[54][1] = 0x00;
+    scoreString[55][1] = 4;
+    scoreString[56][1] = 0;//0x08;
+    scoreString[57][1] = E;
+    scoreString[58][1] = 0x02;
+    scoreString[59][1] = 0x7F;
     
-    if((output & 0x0800) != 0) DAC4 = 1;
-    else DAC4 = 0;
-    
-    if((output & 0x1000) != 0) DAC3 = 1;
-    else DAC3 = 0;
-    
-    if((output & 0x2000) != 0) DAC2 = 1;
-    else DAC2 = 0;
-    
-    if((output & 0x4000) != 0) DAC1 = 1;
-    else DAC1 = 0;
-    
-    if((output & 0x8000) != 0) DAC0 = 1;
-    else DAC0 = 0;
+    scoreString[60][1] = 0xFF;
+    scoreString[61][1] = 0x00;
+    scoreString[62][1] = 3;
+    scoreString[63][1] = 32;//0x00;
+    scoreString[64][1] = 0x00;
+    scoreString[65][1] = 4;
+    scoreString[66][1] = 0;//0x08;
+    scoreString[67][1] = C;
+    scoreString[68][1] = 0x02;
+    scoreString[69][1] = 0x7F;
 }
 
-
-void generateWaveform()
-{
-    int i = 0;
-    float pi = 3.14159;
+void createOutput(){
     
-    for(i=0; i<73; i++)
-    {
-        waveformRootArray[i] = (5000.0 * sin(2.0*pi*(i/73.0)));
-        waveformOvertone1Array[i] = (5000.0 * sin(4.0*pi*(i/73.0)));
-        waveformOvertone2Array[i] = (5000.0 * sin(6.0*pi*(i/73.0)));
-        waveformOvertone3Array[i] = (5000.0 * sin(8.0*pi*(i/73.0)));
-        waveformOvertone4Array[i] = (5000.0 * sin(10.0*pi*(i/73.0)));
-        waveformOvertone5Array[i] = (5000.0 * sin(12.0*pi*(i/73.0)));
+    output = 20000;
+    
+    // *************************************************************************************
+    // READING OF NEW NOTES GOES HERE
+    if(note1.measureStart == measure){
+        if((note1.locationStart == tempo64Counter) || 
+                ((note1.locationStart == tempo32TripletCounter) && (note1.triplet == 1))){
+            note1.noteIsOn = 1;
+        }
     }
-}
 
-// 12 13 14 16 21
-void setVolumes()
-{
-    LED5 = 1;
-    T1CONbits.TON = 0;
-    
-    uint16_t adc;
-    
-    // Read AN9, pin 12, RV1
-    AD1CHS0bits.CH0SA = 9;
-    AD1CON1bits.SAMP = 1;
-    
-    while(AD1CON1bits.DONE != 1);
-    
-    AD1CON1bits.DONE = 0;
-    adc = ADC1BUF0;
-    volume1 = adc/4096.0;
-    
-    
-    // Read AN0, pin 13, RV2
-    AD1CHS0bits.CH0SA = 0;
-    AD1CON1bits.SAMP = 1;
-    
-    while(AD1CON1bits.DONE != 1);
-    
-    AD1CON1bits.DONE = 0;
-    adc = ADC1BUF0;
-    volume2 = adc/4096.0;
-    
-    
-    // Read AN1, pin 14, RV3
-    AD1CHS0bits.CH0SA = 1;
-    AD1CON1bits.SAMP = 1;
-    
-    while(AD1CON1bits.DONE != 1);
-    
-    AD1CON1bits.DONE = 0;
-    adc = ADC1BUF0;
-    volume3 = adc/4096.0;
-    
-    
-    // Read AN3, pin 16, RV4
-    AD1CHS0bits.CH0SA = 3;
-    AD1CON1bits.SAMP = 1;
-    
-    while(AD1CON1bits.DONE != 1);
-    
-    AD1CON1bits.DONE = 0;
-    adc = ADC1BUF0;
-    volume4 = adc/4096.0;
-    
-    
-    // Read AN6, pin 21, RV5
-    AD1CHS0bits.CH0SA = 6;
-    AD1CON1bits.SAMP = 1;
-    
-    while(AD1CON1bits.DONE != 1);
-    
-    AD1CON1bits.DONE = 0;
-    adc = ADC1BUF0;
-    volume5 = adc/4096.0;
-    
-    int i = 0;
-    
-    for(i=0; i<73; i++)
-    {
-        waveformFinalArray[i] = waveformRootArray[i] + 
-                (volume1 * waveformOvertone1Array[i]) +
-                (volume2 * waveformOvertone2Array[i]) +
-                (volume3 * waveformOvertone3Array[i]) +
-                (volume4 * waveformOvertone4Array[i]) +
-                (volume5 * waveformOvertone5Array[i]);
+    if(note2.measureStart == measure){
+        if((note2.locationStart == tempo64Counter) || 
+                ((note2.locationStart == tempo32TripletCounter) && (note2.triplet == 1))){
+            note2.noteIsOn = 1;
+        }
+    }
+
+    if(note3.measureStart == measure){
+        if((note3.locationStart == tempo64Counter) || 
+                ((note3.locationStart == tempo32TripletCounter) && (note3.triplet == 1))){
+            note3.noteIsOn = 1;
+        }
+    }
+
+    if(note4.measureStart == measure){
+        if((note4.locationStart == tempo64Counter) || 
+                ((note4.locationStart == tempo32TripletCounter) && (note4.triplet == 1))){
+            note4.noteIsOn = 1;
+        }
+    }
+
+    if(note5.measureStart == measure){
+        if((note5.locationStart == tempo64Counter) || 
+                ((note5.locationStart == tempo32TripletCounter) && (note5.triplet == 1))){
+            note5.noteIsOn = 1;
+        }
+    }
+
+    if(note6.measureStart == measure){
+        if((note6.locationStart == tempo64Counter) || 
+                ((note6.locationStart == tempo32TripletCounter) && (note6.triplet == 1))){
+            note6.noteIsOn = 1;
+        }
+    }
+
+    if(note7.measureStart == measure){
+        if((note7.locationStart == tempo64Counter) || 
+                ((note7.locationStart == tempo32TripletCounter) && (note7.triplet == 1))){
+            note7.noteIsOn = 1;
+        }
+    }
+
+    if(note8.measureStart == measure){
+        if((note8.locationStart == tempo64Counter) || 
+                ((note8.locationStart == tempo32TripletCounter) && (note8.triplet == 1))){
+            note8.noteIsOn = 1;
+        }
+    }
+
+    if(note9.measureStart == measure){
+        if((note9.locationStart == tempo64Counter) || 
+                ((note9.locationStart == tempo32TripletCounter) && (note9.triplet == 1))){
+            note9.noteIsOn = 1;
+        }
+    }
+
+    if(note10.measureStart == measure){
+        if((note10.locationStart == tempo64Counter) || 
+                ((note10.locationStart == tempo32TripletCounter) && (note10.triplet == 1))){
+            note10.noteIsOn = 1;
+        }
+    }
+    // *************************************************************************************
+
+    // *************************************************************************************
+    // PLAYING NOTES GOES HERE
+    if(note1.noteIsOn == 1){
+        output = output + note1.waveform[note1.currentElement];
+        note1.currentElement++;
+
+        if(note1.currentElement >= note1.waveformElementMax) note1.currentElement = 0;
+
+        if(note1.measureEnd == measure){
+            if((note1.locationEnd == tempo64Counter) || 
+                    ((note1.locationEnd == tempo32TripletCounter) && (note1.triplet == 1))){
+                note1.noteIsOn = 0;
+                note1.available = 1;
+            }
+        }
+    }
+
+    if(note2.noteIsOn == 1){
+        output = output + note2.waveform[note2.currentElement];
+        note2.currentElement++;
+
+        if(note2.currentElement >= note2.waveformElementMax) note2.currentElement = 0;
+
+        if(note2.measureEnd == measure){
+            if((note2.locationEnd == tempo64Counter) || 
+                    ((note2.locationEnd == tempo32TripletCounter) && (note2.triplet == 1))){
+                note2.noteIsOn = 0;
+                note2.available = 1;
+            }
+        }
+    }
+
+    if(note3.noteIsOn == 1){
+        output = output + note3.waveform[note3.currentElement];
+        note3.currentElement++;
+
+        if(note3.currentElement >= note3.waveformElementMax) note3.currentElement = 0;
+
+        if(note3.measureEnd == measure){
+            if((note3.locationEnd == tempo64Counter) || 
+                    ((note3.locationEnd == tempo32TripletCounter) && (note3.triplet == 1))){
+                note3.noteIsOn = 0;
+                note3.available = 1;
+            }
+        }
+    }
+
+    if(note4.noteIsOn == 1){
+        output = output + note4.waveform[note4.currentElement];
+        note4.currentElement++;
+
+        if(note4.currentElement >= note4.waveformElementMax) note4.currentElement = 0;
+
+        if(note4.measureEnd == measure){
+            if((note4.locationEnd == tempo64Counter) || 
+                    ((note4.locationEnd == tempo32TripletCounter) && (note4.triplet == 1))){
+                note4.noteIsOn = 0;
+                note4.available = 1;
+            }
+        }
+    }
+
+    if(note5.noteIsOn == 1){
+        output = output + note5.waveform[note5.currentElement];
+        note5.currentElement++;
+
+        if(note5.currentElement >= note5.waveformElementMax) note5.currentElement = 0;
+
+        if(note5.measureEnd == measure){
+            if((note5.locationEnd == tempo64Counter) || 
+                    ((note5.locationEnd == tempo32TripletCounter) && (note5.triplet == 1))){
+                note5.noteIsOn = 0;
+                note5.available = 1;
+            }
+        }
+    }
+
+    if(note6.noteIsOn == 1){
+        output = output + note6.waveform[note6.currentElement];
+        note6.currentElement++;
+
+        if(note6.currentElement >= note6.waveformElementMax) note6.currentElement = 0;
+
+        if(note6.measureEnd == measure){
+            if((note6.locationEnd == tempo64Counter) || 
+                    ((note6.locationEnd == tempo32TripletCounter) && (note6.triplet == 1))){
+                note6.noteIsOn = 0;
+                note6.available = 1;
+            }
+        }
+    }
+
+    if(note7.noteIsOn == 1){
+        output = output + note7.waveform[note7.currentElement];
+        note7.currentElement++;
+
+        if(note7.currentElement >= note7.waveformElementMax) note7.currentElement = 0;
+
+        if(note7.measureEnd == measure){
+            if((note7.locationEnd == tempo64Counter) || 
+                    ((note7.locationEnd == tempo32TripletCounter) && (note7.triplet == 1))){
+                note7.noteIsOn = 0;
+                note7.available = 1;
+            }
+        }
+    }
+
+    if(note8.noteIsOn == 1){
+        output = output + note8.waveform[note8.currentElement];
+        note8.currentElement++;
+
+        if(note8.currentElement >= note8.waveformElementMax) note8.currentElement = 0;
+
+        if(note8.measureEnd == measure){
+            if((note8.locationEnd == tempo64Counter) || 
+                    ((note8.locationEnd == tempo32TripletCounter) && (note8.triplet == 1))){
+                note8.noteIsOn = 0;
+                note8.available = 1;
+            }
+        }
+    }
+
+    if(note9.noteIsOn == 1){
+        output = output + note9.waveform[note9.currentElement];
+        note9.currentElement++;
+
+        if(note9.currentElement >= note9.waveformElementMax) note9.currentElement = 0;
+
+        if(note9.measureEnd == measure){
+            if((note9.locationEnd == tempo64Counter) || 
+                    ((note9.locationEnd == tempo32TripletCounter) && (note9.triplet == 1))){
+                note9.noteIsOn = 0;
+                note9.available = 1;
+            }
+        }
+    }
+    if(note10.noteIsOn == 1){
+        output = output + note10.waveform[note10.currentElement];
+        note10.currentElement++;
+
+        if(note10.currentElement >= note10.waveformElementMax) note10.currentElement = 0;
+
+        if(note10.measureEnd == measure){
+            if((note10.locationEnd == tempo64Counter) || 
+                    ((note10.locationEnd == tempo32TripletCounter) && (note10.triplet == 1))){
+                note10.noteIsOn = 0;
+                note10.available = 1;
+            }
+        }
     }
     
-    T1CONbits.TON = 1;
-    
-    LED5 = 0;
+    update = 0;
 }
