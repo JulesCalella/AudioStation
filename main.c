@@ -72,17 +72,8 @@ volatile uint8_t update = 0;
 uint8_t scoreString[SCORE_SIZE_Y][SCORE_SIZE_X];
 uint16_t scoreElementY = 0;
 uint16_t scoreElementX = 0;
-volatile NOTE note1;
-volatile NOTE note2;
-volatile NOTE note3;
-volatile NOTE note4;
-volatile NOTE note5;
-volatile NOTE note6;
-volatile NOTE note7;
-volatile NOTE note8;
-volatile NOTE note9;
-volatile NOTE note10;
 
+NOTE noteBufferArray[NOTE_BUFFER_SIZE];
 
 /*******************************************************************************
  * Timer 1 Interrupt
@@ -94,6 +85,8 @@ void __attribute__((__interrupt__, no_auto_psv)) _T1Interrupt(void)
     // Send output to DAC
     dacOutput(output);
     
+    // Tells the main program if can update the output
+    // This controls the index counter of the waveforms
     update = 1;
     
     // Increment tempoCounter and triplet counter
@@ -137,7 +130,6 @@ void __attribute__((__interrupt__, no_auto_psv)) _T1Interrupt(void)
             LED3 = ~LED3;
             tempoCounterLight = 0;
         }
-        
 
     }
 
@@ -156,36 +148,31 @@ int main(void)
     
     if(oscillatorInit() == -1) LED6 = 1;
     
-    note1.available = 1;
-    note2.available = 1;
-    note3.available = 1;
-    note4.available = 1;
-    note5.available = 1;
-    note6.available = 1;
-    note7.available = 1;
-    note8.available = 1;
-    note9.available = 1;
-    note10.available = 1;
+    // Set all structs to available
+    int i;
+    for(i=0; i<NOTE_BUFFER_SIZE; i++){
+        noteBufferArray[i].available = 1;
+    }
     
+    // Write the song to the string
     fillString();
     
-    parseScoreString();
-    parseScoreString();
-    parseScoreString();
-    parseScoreString();
-    parseScoreString();
-    parseScoreString();
-    parseScoreString();
-    parseScoreString();
-    parseScoreString();
-    parseScoreString();
+    // Prefill all available structs
+    for(i=0; i<NOTE_BUFFER_SIZE; i++){
+        parseScoreString();
+    }
     
+    // Write the output values for measure 0
     createOutput();
     
+    // Set up the device
     adcInit();
     timerInit();
+    
+    // Set the volumes for the overtones
     setVolumes();
     
+    // Main while loop
     while(1)
     {
         // Read Button
@@ -330,134 +317,35 @@ int parseScoreString()
     currentElementY++;
     volumeValue = scoreString[currentElementY][currentElementX];
 
-    // Find an available note struct
-    if(note1.available == 1){
-        note1.available = 0;
-        note1.pitch = pitchValue;
-        note1.currentElement = 0;
-        note1.measureStart = measureStartValue;
-        note1.locationStart = locationStartValue;
-        note1.measureEnd = measureEndValue;
-        note1.locationEnd = locationEndValue;
-        note1.triplet = isTriplet;
-        note1.waveform = waveform;
-        note1.waveformElementMax = waveformMax;
-    } else if(note2.available == 1){
-        note2.available = 0;
-        note2.pitch = pitchValue;
-        note2.currentElement = 0;
-        note2.measureStart = measureStartValue;
-        note2.locationStart = locationStartValue;
-        note2.measureEnd = measureEndValue;
-        note2.locationEnd = locationEndValue;
-        note2.triplet = isTriplet;
-        note2.waveform = waveform;
-        note2.waveformElementMax = waveformMax;
-    } else if(note3.available == 1){
-        note3.available = 0;
-        note3.pitch = pitchValue;
-        note3.currentElement = 0;
-        note3.measureStart = measureStartValue;
-        note3.locationStart = locationStartValue;
-        note3.measureEnd = measureEndValue;
-        note3.locationEnd = locationEndValue;
-        note3.triplet = isTriplet;
-        note3.waveform = waveform;
-        note3.waveformElementMax = waveformMax;
-    } else if(note4.available == 1){
-        note4.available = 0;
-        note4.pitch = pitchValue;
-        note4.currentElement = 0;
-        note4.measureStart = measureStartValue;
-        note4.locationStart = locationStartValue;
-        note4.measureEnd = measureEndValue;
-        note4.locationEnd = locationEndValue;
-        note4.triplet = isTriplet;
-        note4.waveform = waveform;
-        note4.waveformElementMax = waveformMax;
-    } else if(note5.available == 1){
-        note5.available = 0;
-        note5.pitch = pitchValue;
-        note5.currentElement = 0;
-        note5.measureStart = measureStartValue;
-        note5.locationStart = locationStartValue;
-        note5.measureEnd = measureEndValue;
-        note5.locationEnd = locationEndValue;
-        note5.triplet = isTriplet;
-        note5.waveform = waveform;
-        note5.waveformElementMax = waveformMax;
-    } else if(note6.available == 1){
-        note6.available = 0;
-        note6.pitch = pitchValue;
-        note6.currentElement = 0;
-        note6.measureStart = measureStartValue;
-        note6.locationStart = locationStartValue;
-        note6.measureEnd = measureEndValue;
-        note6.locationEnd = locationEndValue;
-        note6.triplet = isTriplet;
-        note6.waveform = waveform;
-        note6.waveformElementMax = waveformMax;
-    } else if(note7.available == 1){
-        note7.available = 0;
-        note7.pitch = pitchValue;
-        note7.currentElement = 0;
-        note7.measureStart = measureStartValue;
-        note7.locationStart = locationStartValue;
-        note7.measureEnd = measureEndValue;
-        note7.locationEnd = locationEndValue;
-        note7.triplet = isTriplet;
-        note7.waveform = waveform;
-        note7.waveformElementMax = waveformMax;
-    } else if(note8.available == 1){
-        note8.available = 0;
-        note8.pitch = pitchValue;
-        note8.currentElement = 0;
-        note8.measureStart = measureStartValue;
-        note8.locationStart = locationStartValue;
-        note8.measureEnd = measureEndValue;
-        note8.locationEnd = locationEndValue;
-        note8.triplet = isTriplet;
-        note8.waveform = waveform;
-        note8.waveformElementMax = waveformMax;
-    } else if(note9.available == 1){
-        note9.available = 0;
-        note9.pitch = pitchValue;
-        note9.currentElement = 0;
-        note9.measureStart = measureStartValue;
-        note9.locationStart = locationStartValue;
-        note9.measureEnd = measureEndValue;
-        note9.locationEnd = locationEndValue;
-        note9.triplet = isTriplet;
-        note9.waveform = waveform;
-        note9.waveformElementMax = waveformMax;
-    } else if(note10.available == 1){
-        note10.available = 0;
-        note10.pitch = pitchValue;
-        note10.currentElement = 0;
-        note10.measureStart = measureStartValue;
-        note10.locationStart = locationStartValue;
-        note10.measureEnd = measureEndValue;
-        note10.locationEnd = locationEndValue;
-        note10.triplet = isTriplet;
-        note10.waveform = waveform;
-        note10.waveformElementMax = waveformMax;
-    } else {
-        // If no notes are available, return but dont increment scoreElementY
-        // or scoreElementX
-        return 0;
+    int i;
+    for(i=0; i<NOTE_BUFFER_SIZE; i++){
+        if(noteBufferArray[i].available == 1){
+            noteBufferArray[i].available = 0;
+            noteBufferArray[i].measureStart = measureStartValue;
+            noteBufferArray[i].measureEnd = measureEndValue;
+            noteBufferArray[i].locationStart = locationStartValue;
+            noteBufferArray[i].locationEnd = locationEndValue;
+            noteBufferArray[i].pitch = pitchValue;
+            noteBufferArray[i].triplet = isTriplet;
+            noteBufferArray[i].waveform = waveform;
+            noteBufferArray[i].waveformElementMax = waveformMax;
+            noteBufferArray[i].currentElement = 0;
+            
+            scoreElementY += 10;
+    
+            // Bounds Check
+            if(scoreElementY >= SCORE_SIZE_Y){
+                scoreElementY = 0;
+                scoreElementX++;
+
+                if((scoreElementX == SCORE_SIZE_X) && (scoreElementY == SCORE_SIZE_Y)) return -1;
+            }
+            
+            return 0;
+        }
     }
     
-    // Increment to the next message start
-    scoreElementY += 10;
-    
-    // Bounds Check
-    if(scoreElementY >= SCORE_SIZE_Y){
-        scoreElementY = 0;
-        scoreElementX++;
-        
-        if((scoreElementX == SCORE_SIZE_X) && (scoreElementY == SCORE_SIZE_Y)) return -1;
-    }
-    
+    // No available structs to write to
     return 0;
 }
 
@@ -617,13 +505,8 @@ void pong(uint8_t move)
     }
 }
 
-/* Test Song
- * 0xFF 0x0003 0x00 0x0003 0x10 0x03 0x02 0x7F
- * 0xFF 0x0003 0x10 0x0003 0x20 0x07 0x02 0x7F
- * 0xFF 0x0003 0x20 0x0003 0x30 0x0A 0x02 0x7F
- * 0xFF 0x0004 0x00 0x0005 0x00 0x03 0x02 0x7F
- * 0xFF 0x0004 0x00 0x0005 0x00 0x07 0x02 0x7F
- * 0xFF 0x0004 0x00 0x0005 0x00 0x0A 0x02 0x7F
+/* 
+ * Test Song
  */
 void fillString()
 {
@@ -636,7 +519,7 @@ void fillString()
     scoreString[5][0] = 1;
     scoreString[6][0] = 8;//0x08;
     scoreString[7][0] = C;
-    scoreString[8][0] = 0x02;
+    scoreString[8][0] = 0x01;
     scoreString[9][0] = 0x7F;
     // 0xFF 0x0003 0x10 0x0003 0x20 0x07 0x02 0x7F
     scoreString[10][0] = 0xFF;
@@ -647,7 +530,7 @@ void fillString()
     scoreString[15][0] = 1;
     scoreString[16][0] = 16;//0x10;
     scoreString[17][0] = C;
-    scoreString[18][0] = 0x02;
+    scoreString[18][0] = 0x01;
     scoreString[19][0] = 0x7F;
     // 0xFF 0x0003 0x20 0x0003 0x30 0x0A 0x02 0x7F
     scoreString[20][0] = 0xFF;
@@ -658,7 +541,7 @@ void fillString()
     scoreString[25][0] = 1;
     scoreString[26][0] = 24;//0x18;
     scoreString[27][0] = G;
-    scoreString[28][0] = 0x02;
+    scoreString[28][0] = 0x01;
     scoreString[29][0] = 0x7F;
     // 0xFF 0x0004 0x00 0x0005 0x00 0x03 0x02 0x7F
     scoreString[30][0] = 0xFF;
@@ -669,7 +552,7 @@ void fillString()
     scoreString[35][0] = 1;
     scoreString[36][0] = 32;
     scoreString[37][0] = G;
-    scoreString[38][0] = 0x02;
+    scoreString[38][0] = 0x01;
     scoreString[39][0] = 0x7F;
     //  0xFF 0x0004 0x00 0x0005 0x00 0x07 0x02 0x7F
     scoreString[40][0] = 0xFF;
@@ -680,7 +563,7 @@ void fillString()
     scoreString[45][0] = 1;
     scoreString[46][0] = 40;
     scoreString[47][0] = A;
-    scoreString[48][0] = 0x02;
+    scoreString[48][0] = 0x01;
     scoreString[49][0] = 0x7F;
     // 0xFF 0x0004 0x00 0x0005 0x00 0x0A 0x02 0x7F
     scoreString[50][0] = 0xFF;
@@ -691,7 +574,7 @@ void fillString()
     scoreString[55][0] = 1;
     scoreString[56][0] = 48;
     scoreString[57][0] = A;
-    scoreString[58][0] = 0x02;
+    scoreString[58][0] = 0x01;
     scoreString[59][0] = 0x7F;
     
     scoreString[60][0] = 0xFF;
@@ -702,7 +585,7 @@ void fillString()
     scoreString[65][0] = 2;
     scoreString[66][0] = 0;//0x08;
     scoreString[67][0] = G;
-    scoreString[68][0] = 0x02;
+    scoreString[68][0] = 0x01;
     scoreString[69][0] = 0x7F;
     
     scoreString[70][0] = 0xFF;
@@ -713,7 +596,7 @@ void fillString()
     scoreString[75][0] = 2;
     scoreString[76][0] = 8;//0x08;
     scoreString[77][0] = F;
-    scoreString[78][0] = 0x02;
+    scoreString[78][0] = 0x01;
     scoreString[79][0] = 0x7F;
     
     scoreString[80][0] = 0xFF;
@@ -724,7 +607,7 @@ void fillString()
     scoreString[85][0] = 0x02;
     scoreString[86][0] = 16;//0x08;
     scoreString[87][0] = F;
-    scoreString[88][0] = 0x02;
+    scoreString[88][0] = 0x01;
     scoreString[89][0] = 0x7F;
     
     scoreString[90][0] = 0xFF;
@@ -735,7 +618,7 @@ void fillString()
     scoreString[95][0] = 2;
     scoreString[96][0] = 24;//0x08;
     scoreString[97][0] = E;
-    scoreString[98][0] = 0x02;
+    scoreString[98][0] = 0x01;
     scoreString[99][0] = 0x7F;
     
     scoreString[0][1] = 0xFF;
@@ -746,7 +629,7 @@ void fillString()
     scoreString[5][1] = 2;
     scoreString[6][1] = 32;//0x08;
     scoreString[7][1] = E;
-    scoreString[8][1] = 0x02;
+    scoreString[8][1] = 0x01;
     scoreString[9][1] = 0x7F;
     
     scoreString[10][1] = 0xFF;
@@ -757,7 +640,7 @@ void fillString()
     scoreString[15][1] = 2;
     scoreString[16][1] = 40;//0x08;
     scoreString[17][1] = D;
-    scoreString[18][1] = 0x02;
+    scoreString[18][1] = 0x01;
     scoreString[19][1] = 0x7F;
     
     scoreString[20][1] = 0xFF;
@@ -768,7 +651,7 @@ void fillString()
     scoreString[25][1] = 2;
     scoreString[26][1] = 48;//0x08;
     scoreString[27][1] = D;
-    scoreString[28][1] = 0x02;
+    scoreString[28][1] = 0x01;
     scoreString[29][1] = 0x7F;
     
     scoreString[30][1] = 0xFF;
@@ -779,7 +662,7 @@ void fillString()
     scoreString[35][1] = 3;
     scoreString[36][1] = 0;//0x08;
     scoreString[37][1] = C;
-    scoreString[38][1] = 0x02;
+    scoreString[38][1] = 0x01;
     scoreString[39][1] = 0x7F;
     
     scoreString[40][1] = 0xFF;
@@ -790,7 +673,7 @@ void fillString()
     scoreString[45][1] = 4;
     scoreString[46][1] = 0;//0x08;
     scoreString[47][1] = G;
-    scoreString[48][1] = 0x02;
+    scoreString[48][1] = 0x01;
     scoreString[49][1] = 0x7F;
     
     scoreString[50][1] = 0xFF;
@@ -801,7 +684,7 @@ void fillString()
     scoreString[55][1] = 4;
     scoreString[56][1] = 0;//0x08;
     scoreString[57][1] = E;
-    scoreString[58][1] = 0x02;
+    scoreString[58][1] = 0x01;
     scoreString[59][1] = 0x7F;
     
     scoreString[60][1] = 0xFF;
@@ -812,237 +695,60 @@ void fillString()
     scoreString[65][1] = 4;
     scoreString[66][1] = 0;//0x08;
     scoreString[67][1] = C;
-    scoreString[68][1] = 0x02;
+    scoreString[68][1] = 0x01;
     scoreString[69][1] = 0x7F;
 }
 
 void createOutput(){
     
-    output = 20000;
+    output = 32000;
     
     // *************************************************************************************
     // READING OF NEW NOTES GOES HERE
-    if(note1.measureStart == measure){
-        if((note1.locationStart == tempo64Counter) || 
-                ((note1.locationStart == tempo32TripletCounter) && (note1.triplet == 1))){
-            note1.noteIsOn = 1;
+    int i;
+    for(i=0; i<NOTE_BUFFER_SIZE; i++){
+        if((noteBufferArray[i].measureStart == measure) && (noteBufferArray[i].available == 0)){
+            if((noteBufferArray[i].locationStart == tempo64Counter) || 
+                    ((noteBufferArray[i].locationStart == tempo32TripletCounter) && noteBufferArray[i].triplet == 1)){
+                noteBufferArray[i].noteIsOn = 1;
+            }
         }
     }
-
-    if(note2.measureStart == measure){
-        if((note2.locationStart == tempo64Counter) || 
-                ((note2.locationStart == tempo32TripletCounter) && (note2.triplet == 1))){
-            note2.noteIsOn = 1;
-        }
-    }
-
-    if(note3.measureStart == measure){
-        if((note3.locationStart == tempo64Counter) || 
-                ((note3.locationStart == tempo32TripletCounter) && (note3.triplet == 1))){
-            note3.noteIsOn = 1;
-        }
-    }
-
-    if(note4.measureStart == measure){
-        if((note4.locationStart == tempo64Counter) || 
-                ((note4.locationStart == tempo32TripletCounter) && (note4.triplet == 1))){
-            note4.noteIsOn = 1;
-        }
-    }
-
-    if(note5.measureStart == measure){
-        if((note5.locationStart == tempo64Counter) || 
-                ((note5.locationStart == tempo32TripletCounter) && (note5.triplet == 1))){
-            note5.noteIsOn = 1;
-        }
-    }
-
-    if(note6.measureStart == measure){
-        if((note6.locationStart == tempo64Counter) || 
-                ((note6.locationStart == tempo32TripletCounter) && (note6.triplet == 1))){
-            note6.noteIsOn = 1;
-        }
-    }
-
-    if(note7.measureStart == measure){
-        if((note7.locationStart == tempo64Counter) || 
-                ((note7.locationStart == tempo32TripletCounter) && (note7.triplet == 1))){
-            note7.noteIsOn = 1;
-        }
-    }
-
-    if(note8.measureStart == measure){
-        if((note8.locationStart == tempo64Counter) || 
-                ((note8.locationStart == tempo32TripletCounter) && (note8.triplet == 1))){
-            note8.noteIsOn = 1;
-        }
-    }
-
-    if(note9.measureStart == measure){
-        if((note9.locationStart == tempo64Counter) || 
-                ((note9.locationStart == tempo32TripletCounter) && (note9.triplet == 1))){
-            note9.noteIsOn = 1;
-        }
-    }
-
-    if(note10.measureStart == measure){
-        if((note10.locationStart == tempo64Counter) || 
-                ((note10.locationStart == tempo32TripletCounter) && (note10.triplet == 1))){
-            note10.noteIsOn = 1;
-        }
-    }
+    
     // *************************************************************************************
 
     // *************************************************************************************
     // PLAYING NOTES GOES HERE
-    if(note1.noteIsOn == 1){
-        output = output + note1.waveform[note1.currentElement];
-        note1.currentElement++;
-
-        if(note1.currentElement >= note1.waveformElementMax) note1.currentElement = 0;
-
-        if(note1.measureEnd == measure){
-            if((note1.locationEnd == tempo64Counter) || 
-                    ((note1.locationEnd == tempo32TripletCounter) && (note1.triplet == 1))){
-                note1.noteIsOn = 0;
-                note1.available = 1;
+    int increment;
+    for(i=0; i<NOTE_BUFFER_SIZE; i++){
+        // Determine if the note is currently on
+        if(noteBufferArray[i].noteIsOn == 1){
+            // If it is on, add its current value to the output
+            output = output + noteBufferArray[i].waveform[noteBufferArray[i].currentElement];
+            
+            // Increment the index for the next read
+            increment = 1 + noteBufferArray[i].pitch;
+            noteBufferArray[i].currentElement = noteBufferArray[i].currentElement + increment;
+            
+            // If the index goes out of bounds, reset it
+            if(noteBufferArray[i].currentElement >= noteBufferArray[i].waveformElementMax){
+                noteBufferArray[i].currentElement = noteBufferArray[i].currentElement - noteBufferArray[i].waveformElementMax;
             }
-        }
-    }
-
-    if(note2.noteIsOn == 1){
-        output = output + note2.waveform[note2.currentElement];
-        note2.currentElement++;
-
-        if(note2.currentElement >= note2.waveformElementMax) note2.currentElement = 0;
-
-        if(note2.measureEnd == measure){
-            if((note2.locationEnd == tempo64Counter) || 
-                    ((note2.locationEnd == tempo32TripletCounter) && (note2.triplet == 1))){
-                note2.noteIsOn = 0;
-                note2.available = 1;
-            }
-        }
-    }
-
-    if(note3.noteIsOn == 1){
-        output = output + note3.waveform[note3.currentElement];
-        note3.currentElement++;
-
-        if(note3.currentElement >= note3.waveformElementMax) note3.currentElement = 0;
-
-        if(note3.measureEnd == measure){
-            if((note3.locationEnd == tempo64Counter) || 
-                    ((note3.locationEnd == tempo32TripletCounter) && (note3.triplet == 1))){
-                note3.noteIsOn = 0;
-                note3.available = 1;
-            }
-        }
-    }
-
-    if(note4.noteIsOn == 1){
-        output = output + note4.waveform[note4.currentElement];
-        note4.currentElement++;
-
-        if(note4.currentElement >= note4.waveformElementMax) note4.currentElement = 0;
-
-        if(note4.measureEnd == measure){
-            if((note4.locationEnd == tempo64Counter) || 
-                    ((note4.locationEnd == tempo32TripletCounter) && (note4.triplet == 1))){
-                note4.noteIsOn = 0;
-                note4.available = 1;
-            }
-        }
-    }
-
-    if(note5.noteIsOn == 1){
-        output = output + note5.waveform[note5.currentElement];
-        note5.currentElement++;
-
-        if(note5.currentElement >= note5.waveformElementMax) note5.currentElement = 0;
-
-        if(note5.measureEnd == measure){
-            if((note5.locationEnd == tempo64Counter) || 
-                    ((note5.locationEnd == tempo32TripletCounter) && (note5.triplet == 1))){
-                note5.noteIsOn = 0;
-                note5.available = 1;
-            }
-        }
-    }
-
-    if(note6.noteIsOn == 1){
-        output = output + note6.waveform[note6.currentElement];
-        note6.currentElement++;
-
-        if(note6.currentElement >= note6.waveformElementMax) note6.currentElement = 0;
-
-        if(note6.measureEnd == measure){
-            if((note6.locationEnd == tempo64Counter) || 
-                    ((note6.locationEnd == tempo32TripletCounter) && (note6.triplet == 1))){
-                note6.noteIsOn = 0;
-                note6.available = 1;
-            }
-        }
-    }
-
-    if(note7.noteIsOn == 1){
-        output = output + note7.waveform[note7.currentElement];
-        note7.currentElement++;
-
-        if(note7.currentElement >= note7.waveformElementMax) note7.currentElement = 0;
-
-        if(note7.measureEnd == measure){
-            if((note7.locationEnd == tempo64Counter) || 
-                    ((note7.locationEnd == tempo32TripletCounter) && (note7.triplet == 1))){
-                note7.noteIsOn = 0;
-                note7.available = 1;
-            }
-        }
-    }
-
-    if(note8.noteIsOn == 1){
-        output = output + note8.waveform[note8.currentElement];
-        note8.currentElement++;
-
-        if(note8.currentElement >= note8.waveformElementMax) note8.currentElement = 0;
-
-        if(note8.measureEnd == measure){
-            if((note8.locationEnd == tempo64Counter) || 
-                    ((note8.locationEnd == tempo32TripletCounter) && (note8.triplet == 1))){
-                note8.noteIsOn = 0;
-                note8.available = 1;
-            }
-        }
-    }
-
-    if(note9.noteIsOn == 1){
-        output = output + note9.waveform[note9.currentElement];
-        note9.currentElement++;
-
-        if(note9.currentElement >= note9.waveformElementMax) note9.currentElement = 0;
-
-        if(note9.measureEnd == measure){
-            if((note9.locationEnd == tempo64Counter) || 
-                    ((note9.locationEnd == tempo32TripletCounter) && (note9.triplet == 1))){
-                note9.noteIsOn = 0;
-                note9.available = 1;
-            }
-        }
-    }
-    if(note10.noteIsOn == 1){
-        output = output + note10.waveform[note10.currentElement];
-        note10.currentElement++;
-
-        if(note10.currentElement >= note10.waveformElementMax) note10.currentElement = 0;
-
-        if(note10.measureEnd == measure){
-            if((note10.locationEnd == tempo64Counter) || 
-                    ((note10.locationEnd == tempo32TripletCounter) && (note10.triplet == 1))){
-                note10.noteIsOn = 0;
-                note10.available = 1;
+            
+            // Determine if the note has come to an end
+            if(noteBufferArray[i].measureEnd == measure){
+                if((noteBufferArray[i].locationEnd == tempo64Counter) ||
+                        ((noteBufferArray[i].locationEnd == tempo32TripletCounter) && noteBufferArray[i].triplet == 1)){
+                    // Turn note off
+                    noteBufferArray[i].noteIsOn = 0;
+                    
+                    // Mark it available for incoming data
+                    noteBufferArray[i].available = 1;
+                }
             }
         }
     }
     
+    // Reset update so the timer interrupt can call this function
     update = 0;
 }

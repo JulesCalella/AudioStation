@@ -2,9 +2,9 @@
 #define	WAVEFORM_H
 
 #define SAMPLING_FREQUENCY 16000
-#define TEMPO 80
+#define TEMPO 120
 #define PI 3.14159265
-
+#define NOTE_BUFFER_SIZE 20
 
 // Defines for assigning notes value to note stucts
 #define A 0x00
